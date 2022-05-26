@@ -1,18 +1,33 @@
 const $ = document.querySelector.bind(document)
 const $$ = document.querySelectorAll.bind(document)
+
+const PLAYER_STORAGE_KEY = 'USER'
+
 const heading = $('header h2');
 const audio = $('#audio')
 const cdThumb = $('.cd-thumb');
 const playBtn = $('.btn-toggle-play');
 const player = $('.player');
+const playerlist = $('.playlist');
 const progressAudio = $('#progress');
 const playlistSong = $('.playlist .song');
 const prevBtn = $('.btn-prev');
 const nextBtn = $('.btn-next');
 const repeatBtn = $('.btn-repeat');
+const shuffleBtn = $('.btn-shuffle');
+const songActived = $('.song.avtive');
+const songsPlaylist = $$('.playlist .song');
+
 
 const app = {
     currentIndex : 0,
+    isShuffle: false,
+    isRepeat: false,
+    config: JSON.parse(localStorage.getItem(PLAYER_STORAGE_KEY)) || {},
+    setConfig: function(key, value) {
+        this.config[key] = value;
+        localStorage.getItem(PLAYER_STORAGE_KEY, JSON.stringify(this.config))
+    },
     songs: [
         {
             name: 'Yêu Đương Khó Quá Thì Chạy Về Khóc Với Anh',
@@ -76,9 +91,9 @@ const app = {
         },
     ],
     render: function() {
-        const htmls = this.songs.map((song) => {
+        const htmls = this.songs.map((song, index) => {
             return `
-            <div class="song ">
+            <div class="song ${index === app.currentIndex ? 'active' : ''}" data-index= "${index}">
                 <div class="thumb" style="background-image: url('${song.image}')">
                 </div>
                 <div class="body">
@@ -135,7 +150,6 @@ const app = {
                 cdThumbAnimation.pause();
             }
         })
-        // handle next song 
         // handle playing progress
         audio.ontimeupdate = function () {
             if(audio.duration) {
@@ -146,23 +160,102 @@ const app = {
         // handle sekk song change
         progressAudio.onchange = function () {
             const seekTime = audio.duration / 100 * progressAudio.value;
-            console.log(seekTime);
             audio.currentTime = seekTime;
         }
         //handle next song 
         nextBtn.addEventListener('click', function() {
-            app.nextsong();
-            audio.play();
-            cdThumbAnimation.play()
+            if(app.isShuffle) {
+                app.playShuffleSong();
+                audio.play();
+                player.classList.add('playing');
+                cdThumbAnimation.play();
+                app.render();
+                app.scrollToActiveSong()
+            } else {
+                app.nextSong();
+                audio.play();
+                player.classList.add('playing');
+                cdThumbAnimation.play();
+                app.render()
+                app.scrollToActiveSong()
+            }
+            
         })
+        
         //handle prev song
         prevBtn.addEventListener('click', function() {
-            app.prevSong();
+            if(app.isShuffle) {
+                app.playShuffleSong();
+                audio.play();
+                player.classList.add('playing');
+                cdThumbAnimation.play();
+                app.render()
+                app.scrollToActiveSong()
+            } else {
+                app.prevSong();
+                audio.play();
+                player.classList.add('playing');
+                cdThumbAnimation.play();
+                app.render()
+                app.scrollToActiveSong()
+            }
+            
+        })
+        // handle on/ off shuffle song 
+        shuffleBtn.addEventListener('click', function() {
+            app.isShuffle = !app.isShuffle
+            app.setConfig('isShuffle', app.isShuffle)
+            shuffleBtn.classList.toggle('active', app.isShuffle); 
+        })
+        // handle on/ off repeat song
+        repeatBtn.addEventListener('click', function() {
+            app.isRepeat = !app.isRepeat;
+            app.setConfig('isRepeat', app.isRepeat)
+            repeatBtn.classList.toggle('active', app.repeatBtn)
+        })
+        //handle end song 
+        audio.onended = function() {
+            if(app.isRepeat) {
+                audio.play()
+            } else {
+                nextBtn.click();
+            }
+        }
+        playerlist.addEventListener('click', function(e) {
+            const songNode = e.target.closest('.song:not(.active)')
+            const optionSong = e.target.closest('.option');
+            if(songNode || optionSong) {
+                if(songNode ) {
+                    app.currentIndex = Number(songNode.dataset.index);
+                    app.loadCurrentSong();
+                    app.render()
+                    player.classList.add('playing');
+                    audio.play()
+                }
+            }
+            if(optionSong) {
+                console.log(e.target);
+            }
         })
     },
-    nextsong: function() {
+    scrollToActiveSong: function() {
+        setTimeout(() => {
+            if(app.currentIndex===0) {
+                $('.song.active').scrollIntoView({
+                    behavior: 'smooth', 
+                    block: 'center', 
+                })
+            } else {
+                $('.song.active').scrollIntoView({
+                    behavior: 'smooth', 
+                    block: 'nearest', 
+                })
+            }
+        }) 
+    },
+    nextSong: function() {
         this.currentIndex++;
-        if(this.currentIndex >= this.songs.length - 1) {
+        if(this.currentIndex >= this.songs.length) {
             this.currentIndex = 0
         }
         app.loadCurrentSong()
@@ -174,10 +267,18 @@ const app = {
         }
         app.loadCurrentSong()
     },
+    playShuffleSong: function() {
+        let newIndex;
+        do{
+            newIndex = Math.floor(Math.random() * this.songs.length)
+        } while(newIndex === this.currentIndex)
+        this.currentIndex = newIndex;
+        this.loadCurrentSong()
+    },
     start: function() {
         this.defineProperties()
-        this.handleEvents()
         this.loadCurrentSong()
+        this.handleEvents()
         this.render()
     }
 }
